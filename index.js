@@ -16,9 +16,27 @@ const pgSession = connectPgSimple(session);
 const app = express();
 const port = 3000;
 const saltRounds = 10;
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed!"));
+    }
+  },
+});
 env.config();
 
-const upload = multer({ storage: multer.memoryStorage() });
+// Database connection
+const db = new pg.Pool({
+  user: process.env.PG_USER,
+  host: process.env.PG_HOST,
+  database: process.env.PG_DATABASE,
+  password: process.env.PG_PASSWORD,
+  port: process.env.PG_PORT,
+});
+db.connect();
 
 // Middleware
 app.use(
@@ -32,7 +50,7 @@ app.use(
       httpOnly: true
     },
     store: new pgSession({
-      conString: process.env.DATABASE_URL,
+      pool: db,
       createTableIfMissing: true
     })
   })
@@ -42,16 +60,6 @@ app.use(express.static("public"));
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(flash());
-
-// Database connection
-const db = new pg.Pool({
-  user: process.env.PG_USER,
-  host: process.env.PG_HOST,
-  database: process.env.PG_DATABASE,
-  password: process.env.PG_PASSWORD,
-  port: process.env.PG_PORT,
-});
-db.connect();
 
 // Routes
 
@@ -71,18 +79,25 @@ db.connect();
 // });
 
 app.get("/", async (req, res) => {
-  if (req.isAuthenticated()) {
-    console.log(req.user);
-      try {
+  try {
     const categories = await db.query("SELECT * FROM categories");
-    res.render("home.ejs", { userId: req.user.id, categories: categories.rows });
+
+    const data = {
+      categories: categories.rows,
+    };
+
+    if (req.isAuthenticated()) {
+      data.userId = req.user.id;
+      data.userName = `${req.user.first_name} ${req.user.last_name}`;
+    }
+
+    res.render("home.ejs", data);
   } catch (err) {
     console.log(err);
-  }}
-  else {
-    res.redirect("/login");
+    res.status(500).send("Internal server error");
   }
 });
+
 
 app.get("/login", async (req, res) => {
   try {
@@ -100,14 +115,7 @@ app.get("/category/:categoryId", async (req, res) => {
     const categories = await db.query(`SELECT * FROM categories`);
     const categoryName = await db.query(`SELECT name FROM categories WHERE id = $1`, [categoryId]);
     const categoryNonSoldProducts = await db.query(`SELECT * FROM products WHERE category_id = $1 AND sold = false`, [categoryId]);
-    const products = categoryNonSoldProducts.rows.map(product => {
-      return {
-        ...product,
-        image1: product.image1 ? `data:image/jpeg;base64,${product.image1.toString("base64")}` : null,
-        image2: product.image2 ? `data:image/jpeg;base64,${product.image2.toString("base64")}` : null,
-        image3: product.image3 ? `data:image/jpeg;base64,${product.image3.toString("base64")}` : null,
-      };
-    });
+    const products = categoryNonSoldProducts.rows
     res.render("products.ejs", { categories: categories.rows, categoryName: categoryName.rows[0].name, nonSoldProducts: products, categoryId });
   } catch (err) {
     console.log(err);
@@ -120,15 +128,22 @@ app.get("/sold-category/:categoryId", async (req, res) => {
     const categories = await db.query(`SELECT * FROM categories`);
     const categoryName = await db.query(`SELECT name FROM categories WHERE id = $1`, [categoryId]);
     const categorySoldProducts = await db.query(`SELECT * FROM products WHERE category_id = $1 AND sold = true`, [categoryId]);
-    const products = categorySoldProducts.rows.map(product => {
-      return {
-        ...product,
-        image1: product.image1 ? `data:image/jpeg;base64,${product.image1.toString("base64")}` : null,
-        image2: product.image2 ? `data:image/jpeg;base64,${product.image2.toString("base64")}` : null,
-        image3: product.image3 ? `data:image/jpeg;base64,${product.image3.toString("base64")}` : null,
-      };
-    });
+    const products = categorySoldProducts.rows
     res.render("soldProducts.ejs", { categories: categories.rows, categoryName: categoryName.rows[0].name, soldProducts: products, categoryId });
+  } catch (err) {
+    console.log(err);
+  }
+});
+
+app.get("/category/:categoryId/product/:productId", async (req, res) => {
+  const categoryId = req.params.categoryId;
+  const productId = req.params.productId;
+  try {
+    const categories = await db.query(`SELECT * FROM categories`);
+    const categoryName = await db.query(`SELECT name FROM categories WHERE id = $1`, [categoryId]);
+    const targetedProduct = await db.query(`SELECT * FROM products WHERE id = $1`, [productId]);
+    const product = targetedProduct.rows
+    res.render("productDetails.ejs", { categories: categories.rows, categoryName: categoryName.rows[0].name, product, categoryId });
   } catch (err) {
     console.log(err);
   }
@@ -144,10 +159,9 @@ app.get("/sold-category", (req, res) => {
 
 app.get("/post", async (req, res) => {
   if (req.isAuthenticated()) {
-    console.log(req.user);
       try {
     const categories = await db.query("SELECT * FROM categories");
-    res.render("post.ejs", { userId: req.user.id, categories: categories.rows });
+    res.render("post.ejs", { userId: req.user.id, userName: req.user.first_name + " " + req.user.last_name, categories: categories.rows });
   } catch (err) {
     console.log(err);
   }}
@@ -172,7 +186,7 @@ app.get("/logout", (req, res, next) => {
   });
 });
 
-app.get("/user/:id/profile-picture", async (req, res) => {
+app.get("/profile/:id/profile-picture", async (req, res) => {
   const userId = req.params.id;
 
   try {
@@ -206,14 +220,22 @@ app.get("/image/:id/:slot", async (req, res) => {
     return res.status(400).send("Invalid image slot");
   }
 
-  const result = await db.query(`SELECT ${slot} FROM products WHERE id = $1`, [id]);
-  const image = result.rows[0]?.[slot];
+  try {
+    const result = await db.query(`SELECT ${slot} FROM products WHERE id = $1`, [id]);
+    const image = result.rows[0]?.[slot];
 
-  if (!image) return res.status(404).send("Image not found");
+    if (!image) {
+      return res.status(204).send();
+    }
 
-  res.set("Content-Type", "image/webp");
-  res.send(image);
+    res.set("Content-Type", "image/webp");
+    res.send(image);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error retrieving image");
+  }
 });
+
 
 
 
@@ -221,7 +243,7 @@ app.get("/submit", function (req, res) {
   if (req.isAuthenticated()) {
     res.render("profile.ejs");
   } else {
-    res.redirect("/login");
+    res.redirect("/");
   }
 });
 
@@ -235,82 +257,87 @@ app.post(
 );
 
 app.post("/register", upload.single("profile_picture"), async (req, res) => {
-  const { first_name, last_name, mobile_number, email, password } = req.body;
-
   try {
+    const { first_name, last_name, mobile_number, email, password } = req.body;
     const existing = await db.query("SELECT * FROM users WHERE email = $1", [email]);
     const categories = await db.query("SELECT * FROM categories");
 
     if (existing.rows.length > 0) {
       return res.render("register.ejs", {
         error: "Email address already in use",
-        categories: categories.rows
+        categories: categories.rows,
       });
     }
 
     let profilePictureBuffer = null;
     if (req.file) {
-      profilePictureBuffer = await sharp(req.file.buffer)
-        .webp({ quality: 75 })
-        .toBuffer();
+      profilePictureBuffer = await sharp(req.file.buffer).webp({ quality: 75 }).toBuffer();
     }
 
-    bcrypt.hash(password, saltRounds, async (err, hash) => {
-      if (err) return res.status(500).send("Server error");
+    const hash = await bcrypt.hash(password, saltRounds);
 
-      const result = await db.query(
-        "INSERT INTO users (first_name, last_name, email, password, mobile_number, profile_picture) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-        [first_name, last_name, email, hash, mobile_number, profilePictureBuffer]
-      );
+    const result = await db.query(
+      `INSERT INTO users (first_name, last_name, email, password, mobile_number, profile_picture)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [first_name, last_name, email, hash, mobile_number, profilePictureBuffer]
+    );
 
-      const user = result.rows[0];
-
-      req.login(user, (err) => {
-        if (err) return res.status(500).send("Login failed");
-        res.redirect("/");
-      });
+    const user = result.rows[0];
+    req.login(user, (err) => {
+      if (err) return res.status(500).send("Login failed");
+      res.redirect("/");
     });
   } catch (err) {
-    console.log(err);
+    if (err.message === "Only image files are allowed!") {
+      const categories = await db.query("SELECT * FROM categories");
+      return res.render("register.ejs", {
+        error: "Invalid file type. Please upload images only.",
+        categories: categories.rows,
+      });
+    }
+    console.error(err);
     res.status(500).send("Something went wrong");
   }
 });
 
 
-app.post("/submit", upload.fields([
-  { name: "photo1", maxCount: 1 },
-  { name: "photo2", maxCount: 1 },
-  { name: "photo3", maxCount: 1 },
-]), async function (req, res) {
-  try {
-    const { title, description, category, price, user_id } = req.body;
-    const categoryId = Number(category);
-    const userId = Number(user_id);
-    const minPrice = Number(price);
+app.post(
+  "/submit",
+  upload.fields([
+    { name: "photo1", maxCount: 1 },
+    { name: "photo2", maxCount: 1 },
+    { name: "photo3", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    try {
+      const { title, description, category, price, user_id } = req.body;
 
-    const processImage = async (file) => {
-      if (!file) return null;
-      const webpBuffer = await sharp(file.buffer)
-        .webp({ quality: 75 })
-        .toBuffer();
-      return webpBuffer;
-    };
+      const processImage = async (file) => {
+        if (!file) return null;
+        return await sharp(file.buffer).webp({ quality: 75 }).toBuffer();
+      };
 
-    const image1 = await processImage(req.files.photo1?.[0]);
-    const image2 = await processImage(req.files.photo2?.[0]);
-    const image3 = await processImage(req.files.photo3?.[0]);
+      const image1 = await processImage(req.files.photo1?.[0]);
+      const image2 = await processImage(req.files.photo2?.[0]);
+      const image3 = await processImage(req.files.photo3?.[0]);
 
-    const result = await db.query(
-      "INSERT INTO products (owner_id, name, category_id, description, minimum_price, image1, image2, image3) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
-      [userId, title, categoryId, description, minPrice, image1, image2, image3]
-    );
+      const result = await db.query(
+        `INSERT INTO products (owner_id, name, category_id, description, minimum_price, image1, image2, image3)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [Number(user_id), title, Number(category), description, Number(price), image1, image2, image3]
+      );
 
-    res.redirect("/");
-  } catch (err) {
-    console.error("Error submitting product:", err);
-    res.status(500).send("Internal server error");
+      res.redirect("/");
+    } catch (err) {
+      if (err.message === "Only image files are allowed!") {
+        return res.status(400).send("Invalid file type. Please upload images only.");
+      }
+      console.error("Error submitting product:", err);
+      res.status(500).send("Internal server error");
+    }
   }
-});
+);
+
 
 passport.use(
   new Strategy({ usernameField: "email" }, async function verify(email, password, cb) {
