@@ -2,73 +2,68 @@
 
     
 
-    <!-- // Category Details \\ -->
+<!-- // Category Details \\ -->
+<main>
+  <section class="py-5 text-center container">
+    <div class="row py-lg-5">
+      <div class="col-lg-6 mx-auto">
+        <h1 class="fw-light"><%= categoryName %></h1>
+        <p class="lead text-body-secondary">
+          Short intro to the album contents.
+        </p>
+        <p>
+          <% if (!isSoldView) { %>
+            <a href="/category/<%= categoryId %>?sold=true" class="btn btn-outline-dark">See Sold <%= categoryName %></a>
+          <% } else { %>
+            <a href="/category/<%= categoryId %>" class="btn btn-outline-secondary">See Available <%= categoryName %></a>
+          <% } %>
+        </p>
+      </div>
+    </div>
+  </section>
 
-    <main>
-      <section class="py-5 text-center container">
-        <div class="row py-lg-5">
-          <div class="col-lg-6 mx-auto">
-            <h1 class="fw-light"><%= categoryName %></h1>
-            <p class="lead text-body-secondary">
-              Short intro to the album contents.
-            </p>
-            <p>
-              <a href="/sold-category/<%= categoryId %>" class="btn btn-outline-dark">See Sold <%= categoryName %></a>
-            </p>
+  <div class="album py-5 bg-body-tertiary">
+    <div class="container">
+      <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+        <% if (products.length === 0) { %>
+          <div class="col-12 text-center">
+            <p class="lead">No products <%= isSoldView ? "sold" : "available" %> in this category yet.</p>
           </div>
-        </div>
-      </section>
+        <% } %>
 
-      <div class="album py-5 bg-body-tertiary">
-        <div class="container">
-          <div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
-            
-
-                <% nonSoldProducts.forEach(product => { %>
-                  
-            <div class="col">
-              <div class="card shadow-sm">
-                <svg
-                  class="bd-placeholder-img card-img-top"
-                  width="100%"
-                  height="225"
-                  xmlns="http://www.w3.org/2000/svg"
-                  >
-                  <% if (product.image1) { %>
-                    <img src="/image/<%= product.id %>/image1" alt="Image 1" alt="Image 1" style="height: 100%; width: 100%;" />
-                  <% } else { %>
-                    <rect fill="#55595c" width="100%" height="100%" />
+        <% products.forEach(product => { %>
+          <div class="col">
+            <div class="card shadow-sm">
+                <% if (product.image1) { %>
+                  <img src="/image/<%= product.id %>/image1" alt="Product Image" style="height: 100%; width: 100%;" />
+                <% } else { %>
+                  <rect fill="#55595c" width="100%" height="100%" />
+                <% } %>
+              </svg>
+              <div class="card-body">
+                <p class="card-text">
+                  <%= product.name %>
+                  <% if (isSoldView) { %>
+                    <span class="badge bg-danger ms-2">SOLD</span>
                   <% } %>
-                </svg>
-                <div class="card-body">
-                  <p class="card-text">
-                    <%= product.name %>
-                  </p>
-                  <div
-                    class="d-flex justify-content-between align-items-center"
-                  >
-                    <div class="btn-group">
-                      <a class="btn btn-sm btn-outline-secondary" href="/category/<%= categoryId %>/product/<%= product.id %>">
-                        View Details
-                      </a>
-                    </div>
-                    <small class="text-body-secondary">Min. Price: <%= product.minimum_price %></small>
+                </p>
+                <div class="d-flex justify-content-between align-items-center">
+                  <div class="btn-group">
+                    <a class="btn btn-sm btn-outline-secondary" href="/product/<%= product.id %>">
+                      View Details
+                    </a>
                   </div>
+                  <small class="text-body-secondary">Min. Price: <%= product.minimum_price %></small>
                 </div>
               </div>
             </div>
-
-            <% }); %>
-            
-
-
-
-
-
           </div>
-        </div>
+        <% }); %>
       </div>
-    </main>
+    </div>
+  </div>
+</main>
+
 
     <!-- \\ Category Details // -->
 

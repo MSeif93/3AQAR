@@ -10,7 +10,8 @@ import path from "path";
 import fs from "fs";
 import flash from "connect-flash";
 import sharp from "sharp";
-import connectPgSimple from 'connect-pg-simple';
+import connectPgSimple from "connect-pg-simple";
+import methodOverride from "method-override";
 
 const pgSession = connectPgSimple(session);
 const app = express();
@@ -29,6 +30,7 @@ const upload = multer({
 env.config();
 
 // Database connection
+
 const db = new pg.Pool({
   user: process.env.PG_USER,
   host: process.env.PG_HOST,
@@ -38,21 +40,22 @@ const db = new pg.Pool({
 });
 db.connect();
 
-// Middleware
+// Middlewares
+
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
-    cookie: { 
+    cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
     },
     store: new pgSession({
       pool: db,
-      createTableIfMissing: true
-    })
+      createTableIfMissing: true,
+    }),
   })
 );
 app.use(express.urlencoded({ extended: true }));
@@ -60,23 +63,9 @@ app.use(express.static("public"));
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(flash());
+app.use(methodOverride("_method"));
 
-// Routes
-
-// app.get("/", async (req, res) => {
-//   console.log(req.user);
-//   try {
-//     const categories = await db.query("SELECT * FROM categories");
-//     const products = await db.query("SELECT * FROM products");
-//     res.render("index.ejs", {
-//       categories: categories.rows,
-//       products: products.rows,
-//       user: req.user,
-//     });
-//   } catch (err) {
-//     console.log(err);
-//   }
-// });
+// Get Routes
 
 app.get("/", async (req, res) => {
   try {
@@ -98,82 +87,20 @@ app.get("/", async (req, res) => {
   }
 });
 
+app.get("/register", async (req, res) => {
+  try {
+    const categories = await db.query("SELECT * FROM categories");
+    res.render("register.ejs", { categories: categories.rows });
+  } catch (err) {
+    console.log(err);
+  }
+});
 
 app.get("/login", async (req, res) => {
   try {
     const categories = await db.query(`SELECT * FROM categories`);
     const errorMessage = req.flash("error");
     res.render("login.ejs", { categories: categories.rows, errorMessage });
-  } catch (err) {
-    console.log(err);
-  }
-});
-
-app.get("/category/:categoryId", async (req, res) => {
-  const categoryId = req.params.categoryId;
-  try {
-    const categories = await db.query(`SELECT * FROM categories`);
-    const categoryName = await db.query(`SELECT name FROM categories WHERE id = $1`, [categoryId]);
-    const categoryNonSoldProducts = await db.query(`SELECT * FROM products WHERE category_id = $1 AND sold = false`, [categoryId]);
-    const products = categoryNonSoldProducts.rows
-    res.render("products.ejs", { categories: categories.rows, categoryName: categoryName.rows[0].name, nonSoldProducts: products, categoryId });
-  } catch (err) {
-    console.log(err);
-  }
-});
-
-app.get("/sold-category/:categoryId", async (req, res) => {
-  const categoryId = req.params.categoryId;
-  try {
-    const categories = await db.query(`SELECT * FROM categories`);
-    const categoryName = await db.query(`SELECT name FROM categories WHERE id = $1`, [categoryId]);
-    const categorySoldProducts = await db.query(`SELECT * FROM products WHERE category_id = $1 AND sold = true`, [categoryId]);
-    const products = categorySoldProducts.rows
-    res.render("soldProducts.ejs", { categories: categories.rows, categoryName: categoryName.rows[0].name, soldProducts: products, categoryId });
-  } catch (err) {
-    console.log(err);
-  }
-});
-
-app.get("/category/:categoryId/product/:productId", async (req, res) => {
-  const categoryId = req.params.categoryId;
-  const productId = req.params.productId;
-  try {
-    const categories = await db.query(`SELECT * FROM categories`);
-    const categoryName = await db.query(`SELECT name FROM categories WHERE id = $1`, [categoryId]);
-    const targetedProduct = await db.query(`SELECT * FROM products WHERE id = $1`, [productId]);
-    const product = targetedProduct.rows
-    res.render("productDetails.ejs", { categories: categories.rows, categoryName: categoryName.rows[0].name, product, categoryId });
-  } catch (err) {
-    console.log(err);
-  }
-});
-
-app.get("/category", (req, res) => {
-    res.redirect("/");
-});
-
-app.get("/sold-category", (req, res) => {
-    res.redirect("/");
-});
-
-app.get("/post", async (req, res) => {
-  if (req.isAuthenticated()) {
-      try {
-    const categories = await db.query("SELECT * FROM categories");
-    res.render("post.ejs", { userId: req.user.id, userName: req.user.first_name + " " + req.user.last_name, categories: categories.rows });
-  } catch (err) {
-    console.log(err);
-  }}
-  else {
-    res.redirect("/login");
-  }
-});
-
-app.get("/register", async (req, res) => {
-  try {
-    const categories = await db.query("SELECT * FROM categories");
-    res.render("register.ejs", { categories: categories.rows });
   } catch (err) {
     console.log(err);
   }
@@ -186,11 +113,173 @@ app.get("/logout", (req, res, next) => {
   });
 });
 
+app.get("/category/:categoryId", async (req, res) => {
+  const categoryId = req.params.categoryId;
+  const soldFlag = req.query.sold === "true";
+
+  try {
+    const categoriesQuery = `SELECT * FROM categories`;
+    const categoryNameQuery = `SELECT name FROM categories WHERE id = $1`;
+    const productsQuery = `SELECT * FROM products WHERE category_id = $1 AND sold = $2`;
+
+    const [categories, categoryName, result] = await Promise.all([
+      db.query(categoriesQuery),
+      db.query(categoryNameQuery, [categoryId]),
+      db.query(productsQuery, [categoryId, soldFlag]),
+    ]);
+
+    const data = {
+      categoryId,
+      categories: categories.rows,
+      categoryName: categoryName.rows[0]?.name || "Unknown Category",
+      products: result.rows,
+      isSoldView: soldFlag,
+    };
+
+    if (req.isAuthenticated()) {
+      data.userId = req.user.id;
+      data.userName = `${req.user.first_name} ${req.user.last_name}`;
+    }
+
+    res.render("products.ejs", data);
+  } catch (err) {
+    console.error("Error loading category:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/category", (req, res) => {
+  res.redirect("/");
+});
+
+app.get("/product/:productId", async (req, res) => {
+  const { productId } = req.params;
+
+  try {
+    const [categoriesResult, productResult] = await Promise.all([
+      db.query(`SELECT * FROM categories`),
+      db.query(
+        `
+        SELECT p.*, c.name AS category_name
+        FROM products p
+        JOIN categories c ON p.category_id = c.id
+        WHERE p.id = $1
+      `,
+        [productId]
+      ),
+    ]);
+
+    const product = productResult.rows[0];
+
+    if (!product) {
+      return res.status(404).send("Product not found");
+    }
+
+    const data = {
+      product,
+      categoryId: product.category_id,
+      categoryName: product.category_name,
+      categories: categoriesResult.rows,
+      bids: [],
+      isOwner: false,
+    };
+
+    if (req.isAuthenticated()) {
+      const userId = req.user.id;
+      data.userId = userId;
+      data.userName = `${req.user.first_name} ${req.user.last_name}`;
+      data.isOwner = userId === product.owner_id;
+
+      if (data.isOwner) {
+        const bidsResult = await db.query(
+          `
+          SELECT b.*, u.first_name || ' ' || u.last_name AS username, u.profile_picture
+          FROM bids b
+          JOIN users u ON b.bidder_id = u.id
+          WHERE b.product_id = $1
+          ORDER BY b.bid DESC
+        `,
+          [productId]
+        );
+
+        data.bids = bidsResult.rows;
+      }
+    }
+
+    res.render("productDetails.ejs", data);
+  } catch (err) {
+    console.error("Error fetching product details:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+app.get("/product", (req, res) => {
+  res.redirect("/");
+});
+
+app.get("/post", async (req, res) => {
+  if (req.isAuthenticated()) {
+    try {
+      const categories = await db.query("SELECT * FROM categories");
+      res.render("post.ejs", {
+        userId: req.user.id,
+        userName: req.user.first_name + " " + req.user.last_name,
+        categories: categories.rows,
+      });
+    } catch (err) {
+      console.log(err);
+    }
+  } else {
+    res.redirect("/login");
+  }
+});
+
+app.get("/product/:productId/edit", async (req, res) => {
+  const { productId } = req.params;
+  const userId = req.user?.id;
+  const userName = req.user
+    ? `${req.user.first_name} ${req.user.last_name}`
+    : null;
+
+  try {
+    const productResult = await db.query(
+      "SELECT * FROM products WHERE id = $1",
+      [productId]
+    );
+    const product = productResult.rows[0];
+    if (!product) {
+      return res.status(404).send("Product not found");
+    }
+
+    if (product.owner_id !== userId) {
+      return res.status(403).send("Not authorized to edit this product");
+    }
+
+    const categoriesResult = await db.query(
+      "SELECT * FROM categories ORDER BY name"
+    );
+    const categories = categoriesResult.rows;
+
+    res.render("post.ejs", {
+      product,
+      categories,
+      userId,
+      userName,
+    });
+  } catch (error) {
+    console.error("Error fetching product for edit:", error);
+    res.status(500).send("Internal server error");
+  }
+});
+
 app.get("/profile/:id/profile-picture", async (req, res) => {
   const userId = req.params.id;
 
   try {
-    const result = await db.query("SELECT profile_picture FROM users WHERE id = $1", [userId]);
+    const result = await db.query(
+      "SELECT profile_picture FROM users WHERE id = $1",
+      [userId]
+    );
     if (result.rows.length === 0) return res.status(404).send("User not found");
 
     const image = result.rows[0].profile_picture;
@@ -207,7 +296,6 @@ app.get("/profile/:id/profile-picture", async (req, res) => {
 
     res.set("Content-Type", "image/webp");
     res.send(image);
-
   } catch (err) {
     console.error(err);
     res.status(500).send("Error loading image");
@@ -221,7 +309,10 @@ app.get("/image/:id/:slot", async (req, res) => {
   }
 
   try {
-    const result = await db.query(`SELECT ${slot} FROM products WHERE id = $1`, [id]);
+    const result = await db.query(
+      `SELECT ${slot} FROM products WHERE id = $1`,
+      [id]
+    );
     const image = result.rows[0]?.[slot];
 
     if (!image) {
@@ -236,30 +327,14 @@ app.get("/image/:id/:slot", async (req, res) => {
   }
 });
 
-
-
-
-app.get("/submit", function (req, res) {
-  if (req.isAuthenticated()) {
-    res.render("profile.ejs");
-  } else {
-    res.redirect("/");
-  }
-});
-
-app.post(
-  "/login",
-  passport.authenticate("local", {
-    successRedirect: "/",
-    failureRedirect: "/login",
-    failureFlash: true,
-  })
-);
+// Post Routes
 
 app.post("/register", upload.single("profile_picture"), async (req, res) => {
   try {
     const { first_name, last_name, mobile_number, email, password } = req.body;
-    const existing = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+    const existing = await db.query("SELECT * FROM users WHERE email = $1", [
+      email,
+    ]);
     const categories = await db.query("SELECT * FROM categories");
 
     if (existing.rows.length > 0) {
@@ -271,7 +346,9 @@ app.post("/register", upload.single("profile_picture"), async (req, res) => {
 
     let profilePictureBuffer = null;
     if (req.file) {
-      profilePictureBuffer = await sharp(req.file.buffer).webp({ quality: 75 }).toBuffer();
+      profilePictureBuffer = await sharp(req.file.buffer)
+        .webp({ quality: 75 })
+        .toBuffer();
     }
 
     const hash = await bcrypt.hash(password, saltRounds);
@@ -300,6 +377,14 @@ app.post("/register", upload.single("profile_picture"), async (req, res) => {
   }
 });
 
+app.post(
+  "/login",
+  passport.authenticate("local", {
+    successRedirect: "/",
+    failureRedirect: "/login",
+    failureFlash: true,
+  })
+);
 
 app.post(
   "/submit",
@@ -324,13 +409,24 @@ app.post(
       const result = await db.query(
         `INSERT INTO products (owner_id, name, category_id, description, minimum_price, image1, image2, image3)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [Number(user_id), title, Number(category), description, Number(price), image1, image2, image3]
+        [
+          Number(user_id),
+          title,
+          Number(category),
+          description,
+          Number(price),
+          image1,
+          image2,
+          image3,
+        ]
       );
 
-      res.redirect("/");
+      res.redirect("/product/" + result.rows[0].id);
     } catch (err) {
       if (err.message === "Only image files are allowed!") {
-        return res.status(400).send("Invalid file type. Please upload images only.");
+        return res
+          .status(400)
+          .send("Invalid file type. Please upload images only.");
       }
       console.error("Error submitting product:", err);
       res.status(500).send("Internal server error");
@@ -338,11 +434,224 @@ app.post(
   }
 );
 
+app.post("/product/:productId/bid", async (req, res) => {
+  const { productId } = req.params;
+  const userId = req.user?.id;
+  const bidAmount = parseFloat(req.body.bid);
+
+  if (!userId) {
+    return res
+      .status(401)
+      .json({ message: "You must be logged in to place a bid." });
+  }
+
+  if (isNaN(bidAmount) || bidAmount <= 0) {
+    return res.status(400).json({ message: "Invalid bid amount." });
+  }
+
+  try {
+    const productResult = await db.query(
+      "SELECT * FROM products WHERE id = $1",
+      [productId]
+    );
+    const product = productResult.rows[0];
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    if (product.sold) {
+      return res
+        .status(400)
+        .json({ message: "This product has already been sold." });
+    }
+
+    if (bidAmount < parseFloat(product.minimum_price)) {
+      return res
+        .status(400)
+        .json({ message: `Bid must be at least ${product.minimum_price}.` });
+    }
+
+    if (product.owner_id === userId) {
+      return res
+        .status(403)
+        .json({ message: "You cannot bid on your own product." });
+    }
+
+    await db.query(
+      `
+      INSERT INTO bids (product_id, bidder_id, bid)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (product_id, bidder_id)
+      DO UPDATE SET bid = EXCLUDED.bid, bid_time = CURRENT_TIMESTAMP
+    `,
+      [productId, userId, bidAmount]
+    );
+
+    res.json({ message: "Bid submitted successfully." });
+  } catch (error) {
+    console.error("Error submitting bid:", error);
+    res.status(500).json({ message: "Internal server error." });
+  }
+});
+
+app.post("/accept-bid", async (req, res) => {
+  const { productId, bidderId } = req.body;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    return res.status(401).send("Unauthorized");
+  }
+
+  try {
+    const productRes = await db.query(`SELECT * FROM products WHERE id = $1`, [
+      productId,
+    ]);
+
+    const product = productRes.rows[0];
+
+    if (!product) {
+      return res.status(404).send("Product not found");
+    }
+
+    if (product.owner_id !== userId) {
+      return res.status(403).send("Forbidden: You are not the owner");
+    }
+
+    if (product.sold) {
+      return res.status(400).send("Product already sold");
+    }
+
+    const bidRes = await db.query(
+      `SELECT * FROM bids WHERE product_id = $1 AND bidder_id = $2`,
+      [productId, bidderId]
+    );
+
+    const bid = bidRes.rows[0];
+
+    if (!bid) {
+      return res.status(404).send("Bid not found");
+    }
+
+    await db.query(
+      `UPDATE products SET sold = TRUE, updated_at = NOW() WHERE id = $1`,
+      [productId]
+    );
+
+    await db.query(
+      `INSERT INTO sell_off (product_id, buyer_id, final_price, sold_at) VALUES ($1, $2, $3, NOW())`,
+      [productId, bidderId, bid.bid]
+    );
+
+    await db.query(`DELETE FROM bids WHERE product_id = $1`, [productId]);
+
+    res.redirect(`/product/${productId}?message=bid_accepted`);
+  } catch (err) {
+    console.error("Error accepting bid:", err);
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+// Patch Routes
+
+app.patch(
+  "/product/:productId/edit",
+  upload.fields([
+    { name: "photo1", maxCount: 1 },
+    { name: "photo2", maxCount: 1 },
+    { name: "photo3", maxCount: 1 },
+  ]),
+  async (req, res) => {
+    const { productId } = req.params;
+    const { title, description, category, price, user_id } = req.body;
+
+    try {
+      const productResult = await db.query(
+        `SELECT owner_id FROM products WHERE id = $1`,
+        [productId]
+      );
+      const product = productResult.rows[0];
+      if (!product) {
+        return res.status(404).send("Product not found");
+      }
+      if (product.owner_id !== Number(user_id)) {
+        return res.status(403).send("Not authorized to edit this product");
+      }
+
+      const processImage = async (file) => {
+        if (!file) return null;
+        return await sharp(file.buffer).webp({ quality: 75 }).toBuffer();
+      };
+
+      const image1 = await processImage(req.files.photo1?.[0]);
+      const image2 = await processImage(req.files.photo2?.[0]);
+      const image3 = await processImage(req.files.photo3?.[0]);
+
+      let updateImageQuery = "";
+      const updateValues = [
+        title,
+        Number(category),
+        description,
+        Number(price),
+      ];
+      let paramIndex = 4;
+
+      if (image1) {
+        paramIndex++;
+        updateImageQuery += `, image1 = $${paramIndex}`;
+        updateValues.push(image1);
+      }
+      if (image2) {
+        paramIndex++;
+        updateImageQuery += `, image2 = $${paramIndex}`;
+        updateValues.push(image2);
+      }
+      if (image3) {
+        paramIndex++;
+        updateImageQuery += `, image3 = $${paramIndex}`;
+        updateValues.push(image3);
+      }
+
+      paramIndex++;
+      updateValues.push(productId);
+
+      const updateQuery = `
+        UPDATE products SET
+          name = $1,
+          category_id = $2,
+          description = $3,
+          minimum_price = $4
+          ${updateImageQuery}
+        WHERE id = $${paramIndex}
+      `;
+
+      await db.query(updateQuery, updateValues);
+
+      res.redirect(`/product/${productId}`);
+    } catch (err) {
+      if (err.message === "Only image files are allowed!") {
+        return res
+          .status(400)
+          .send("Invalid file type. Please upload images only.");
+      }
+      console.error("Error updating product:", err);
+      res.status(500).send("Internal server error");
+    }
+  }
+);
+
+// Passport Configurations
 
 passport.use(
-  new Strategy({ usernameField: "email" }, async function verify(email, password, cb) {
+  new Strategy({ usernameField: "email" }, async function verify(
+    email,
+    password,
+    cb
+  ) {
     try {
-      const result = await db.query("SELECT * FROM users WHERE email = $1", [email]);
+      const result = await db.query("SELECT * FROM users WHERE email = $1", [
+        email,
+      ]);
       if (result.rows.length > 0) {
         const user = result.rows[0];
         bcrypt.compare(password, user.password, (err, valid) => {
@@ -362,7 +671,6 @@ passport.use(
   })
 );
 
-
 passport.serializeUser((user, cb) => {
   cb(null, user.id);
 });
@@ -376,6 +684,8 @@ passport.deserializeUser(async (id, cb) => {
     cb(err);
   }
 });
+
+// Running Port
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);

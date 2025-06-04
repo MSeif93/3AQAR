@@ -1,39 +1,164 @@
 <%- include('partials/header') %>
 
 <main>
-  <section class="py-5 text-center container">
-    <div class="row py-lg-5">
-      <div class="col-lg-6 mx-auto">
-        <h1 class="fw-light"><%= product.name %></h1>
-        <p class="lead text-body-secondary">
-          Product details and images.
-        </p>
+  <!-- Back Button -->
+  <section class="py-3 container">
+    <a href="/category/<%= product.category_id %>" class="btn btn-outline-primary mb-3">
+      &larr; Back to <%= categoryName %>
+    </a>
+  </section>
+
+  <!-- Title & Status -->
+  <section class="py-3 text-center container">
+    <div class="row py-lg-3">
+      <div class="col-lg-8 mx-auto">
+        <h1 class="fw-light">
+          <%= product.name %>
+          <% if (product.sold) { %>
+            <span class="badge bg-danger fs-6">Sold</span>
+          <% } else { %>
+            <span class="badge bg-success fs-6">Available</span>
+          <% } %>
+        </h1>
+        <p class="lead text-body-secondary">3AQAR details and images</p>
       </div>
     </div>
   </section>
 
-  <div class="container">
+  <div class="container mb-5">
     <div class="row">
-      <div class="col-md-6">
-        
-        <img src="/image/<%= product.id %>/image1" alt="Image 1" class="img-fluid" />
-        <img src="/image/<%= product.id %>/image2" alt="Image 1" class="img-fluid" />
-        <img src="/image/<%= product.id %>/image3" alt="Image 1" class="img-fluid" />
-          
-        
+      <!-- Carousel -->
+      <div class="col-md-6 mb-4">
+        <div id="productImagesCarousel" class="carousel slide" data-bs-ride="carousel">
+          <div class="carousel-inner">
+            <% ["image1", "image2", "image3"].forEach((img, idx) => { %>
+              <% if (product[img]) { %>
+                <div class="carousel-item <%= idx === 0 ? 'active' : '' %>">
+                  <img 
+                    src="/image/<%= product.id %>/<%= img %>" 
+                    class="d-block w-100 rounded shadow-sm" 
+                    alt="Image <%= idx + 1 %>"
+                    style="aspect-ratio: 1/1; object-fit: cover; height: 400px;"
+                  >
+
+                </div>
+              <% } %>
+            <% }) %>
+          </div>
+          <button class="carousel-control-prev" type="button" data-bs-target="#productImagesCarousel" data-bs-slide="prev">
+            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Previous</span>
+          </button>
+          <button class="carousel-control-next" type="button" data-bs-target="#productImagesCarousel" data-bs-slide="next">
+            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            <span class="visually-hidden">Next</span>
+          </button>
+        </div>
       </div>
+
+      <!-- Product Info -->
       <div class="col-md-6">
-        <h2>Product Details</h2>
-        <p><strong>Category:</strong> <%= categoryName %></p>
-        <p><strong>Description:</strong> <%= product.description %></p>
-        <p><strong>Minimum Price:</strong> $<%= product.minimum_price %></p>
-        <p><strong>Created at:</strong> <%= product.created_at %></p>
-        <p><strong>Updated at:</strong> <%= product.updated_at %></p>
+        <h4 class="mb-3">3AQAR Information</h4>
+<ul class="list-group list-group-flush">
+  <li class="list-group-item d-flex">
+    <div class="fw-bold me-2" style="min-width: 120px;">Category:</div>
+    <div><%= categoryName %></div>
+  </li>
+  <li class="list-group-item d-flex">
+    <div class="fw-bold me-2" style="min-width: 120px;">Description:</div>
+    <div><%- product.description.replace(/\n/g, '<br>') %></div>
+  </li>
+  <li class="list-group-item d-flex">
+    <div class="fw-bold me-2" style="min-width: 120px;">Minimum Price:</div>
+    <div><%= product.minimum_price %></div>
+  </li>
+  <li class="list-group-item d-flex">
+    <div class="fw-bold me-2" style="min-width: 120px;">Created At:</div>
+    <div><%= new Date(product.created_at).toLocaleString() %></div>
+  </li>
+  <li class="list-group-item d-flex">
+    <div class="fw-bold me-2" style="min-width: 120px;">Last Updated:</div>
+    <div><%= new Date(product.updated_at).toLocaleString() %></div>
+  </li>
+</ul>
+
+        <% if (isOwner && !product.sold) { %>
+          <a href="/product/<%= product.id %>/edit" class="btn btn-warning mt-3">Edit Product</a>
+        <% } %>
       </div>
     </div>
-  </div>
 
+    <hr class="my-4" />
+
+    <!-- Bidding Section -->
+    <% if (!isOwner && !product.sold) { %>
+      <div class="row mt-4">
+        <div class="col-md-6 offset-md-3">
+          <h5>Submit Your Bid</h5>
+<form method="POST" action="/product/<%= product.id %>/bid">
+  <div class="input-group">
+    <input type="number" name="bid" step="0.01" class="form-control" placeholder="Enter your bid" required />
+    <button class="btn btn-primary" type="submit">Submit Bid</button>
+  </div>
+</form>
+
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Display Bids for Owner -->
+<% if (isOwner && Array.isArray(bids) && bids.length > 0) { %>
+  <div class="row mt-5">
+    <div class="col-md-10 offset-md-1">
+      <h4>Offers Received</h4>
+      <table class="table table-bordered table-hover mt-3">
+        <thead>
+          <tr>
+            <th>Bidder</th>
+            <th>Bid Amount</th>
+            <th>Time</th>
+            <th>Photo</th>
+            <% if (!product.sold) { %><th>Action</th><% } %>
+          </tr>
+        </thead>
+        <tbody>
+          <% bids.forEach(b => { %>
+            <tr>
+              <td><%= b.username %></td>
+              <td><%= b.bid %></td>
+              <td><%= new Date(b.bid_time).toLocaleString() %></td>
+              <td>
+                <% if (b.profile_image) { %>
+                  <img src="/user/<%= b.bidder_id %>/avatar" width="40" height="40" class="rounded-circle" />
+                <% } else { %>
+                  <span class="text-muted">N/A</span>
+                <% } %>
+              </td>
+              <% if (!product.sold) { %>
+                <td>
+                  <form method="POST" action="/product/<%= product.id %>/accept-bid">
+                    <input type="hidden" name="bidder_id" value="<%= b.bidder_id %>" />
+                    <button class="btn btn-success btn-sm" type="submit">Accept</button>
+                  </form>
+                </td>
+              <% } %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<% } else if (isOwner) { %>
+  <div class="alert alert-info mt-5 text-center">
+    No offers received yet.
+  </div>
+<% } %>
+
+
+  </div>
 </main>
+
+
 
 
 
@@ -42,5 +167,37 @@
       integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO"
       crossorigin="anonymous"
     ></script>
+<script>
+  document.querySelector('form[action="/product/<%= product.id %>/bid"]').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const form = event.target;
+    const bidAmount = form.bid.value;
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append('bid', bidAmount);
+
+      const response = await fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: formData.toString()
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.message || 'Error: Failed to submit bid');
+        return;
+      }
+
+      alert('Bid submitted successfully!');
+      form.reset();
+
+    } catch (err) {
+      alert('Network error. Please try again.');
+      console.error(err);
+    }
+  });
+</script>
   </body>
 </html>
