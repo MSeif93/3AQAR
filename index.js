@@ -59,11 +59,22 @@ app.use(
   })
 );
 app.use(express.urlencoded({ extended: true }));
+app.use(methodOverride((req, res) => {
+  if (req.body && typeof req.body === 'object' && '_method' in req.body) {
+    return req.body._method;
+  }
+  if (req.query && '_method' in req.query) {
+    return req.query._method;
+  }
+}));
 app.use(express.static("public"));
 app.use(passport.initialize());
 app.use(passport.session());
 app.use(flash());
-app.use(methodOverride("_method"));
+// app.use((req, res, next) => {
+//   console.log(`${req.method} ${req.url}`);
+//   next();
+// });
 
 // Get Routes
 
@@ -73,12 +84,9 @@ app.get("/", async (req, res) => {
 
     const data = {
       categories: categories.rows,
+      userId: req.isAuthenticated() ? req.user.id : null,
+      userName: req.isAuthenticated() ? `${req.user.first_name} ${req.user.last_name}` : null,
     };
-
-    if (req.isAuthenticated()) {
-      data.userId = req.user.id;
-      data.userName = `${req.user.first_name} ${req.user.last_name}`;
-    }
 
     res.render("home.ejs", data);
   } catch (err) {
@@ -113,33 +121,87 @@ app.get("/logout", (req, res, next) => {
   });
 });
 
+app.get("/profile/:profileId", async (req, res) => {
+  const profileId = req.params.profileId;
+  try {
+    const profileResult = await db.query(
+      "SELECT * FROM users WHERE id = $1",
+      [profileId]
+    );
+    if (profileResult.rows.length === 0) {
+      return res.status(404).send("Profile not found");
+    }
+    const profile = profileResult.rows[0];
+    const categories = await db.query("SELECT * FROM categories");
+    const soldProducts = await db.query("SELECT * FROM products WHERE owner_id = $1 AND sold = TRUE ORDER BY id ASC", [profileId]);
+    const unsoldProducts = await db.query("SELECT * FROM products WHERE owner_id = $1 AND sold = FALSE ORDER BY id ASC", [profileId]);
+    const buyedProducts = await db.query("SELECT * FROM sell_off WHERE buyer_id = $1 ORDER BY product_id ASC", [profileId]);
+    const unbuyedProducts = await db.query("SELECT * FROM bids WHERE bidder_id = $1 ORDER BY product_id ASC", [profileId]);
+
+    const data = {
+      profileId,
+      profileName: `${profile.first_name} ${profile.last_name}`,
+      profileEmail: profile.email,
+      profileMobile: profile.mobile_number || "N/A",
+      categories: categories.rows,
+      soldProducts: soldProducts.rows,
+      unsoldProducts: unsoldProducts.rows,
+      buyedProducts: buyedProducts.rows,
+      unbuyedProducts: unbuyedProducts.rows,
+      isOwner: req.isAuthenticated() && req.user.id === parseInt(profileId),
+      userId: req.isAuthenticated() ? req.user.id : null,
+      userName: req.isAuthenticated() ? `${req.user.first_name} ${req.user.last_name}` : null,
+    };
+
+    res.render("profile.ejs", data);
+  } catch (err) {
+    console.log(err);
+    res.status(500).send("Internal server error");
+  }
+});
+
 app.get("/category/:categoryId", async (req, res) => {
   const categoryId = req.params.categoryId;
   const soldFlag = req.query.sold === "true";
+  const limit = 9;
+  const page = parseInt(req.query.page) || 1;
+  const offset = (page - 1) * limit;
 
   try {
     const categoriesQuery = `SELECT * FROM categories`;
     const categoryNameQuery = `SELECT name FROM categories WHERE id = $1`;
-    const productsQuery = `SELECT * FROM products WHERE category_id = $1 AND sold = $2`;
+    const productsQuery = `
+      SELECT * FROM products 
+      WHERE category_id = $1 AND sold = $2 
+      ORDER BY id ASC 
+      LIMIT $3 OFFSET $4
+    `;
+    const countQuery = `
+      SELECT COUNT(*) FROM products 
+      WHERE category_id = $1 AND sold = $2
+    `;
 
-    const [categories, categoryName, result] = await Promise.all([
+    const [categories, categoryName, productsResult, countResult] = await Promise.all([
       db.query(categoriesQuery),
       db.query(categoryNameQuery, [categoryId]),
-      db.query(productsQuery, [categoryId, soldFlag]),
+      db.query(productsQuery, [categoryId, soldFlag, limit, offset]),
+      db.query(countQuery, [categoryId, soldFlag]),
     ]);
+
+    const totalProducts = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(totalProducts / limit);
 
     const data = {
       categoryId,
       categories: categories.rows,
       categoryName: categoryName.rows[0]?.name || "Unknown Category",
-      products: result.rows,
+      products: productsResult.rows,
       isSoldView: soldFlag,
+      currentPage: page,
+      totalPages,
+      userId: req.isAuthenticated() ? req.user.id : null,
+      userName: req.isAuthenticated() ? `${req.user.first_name} ${req.user.last_name}` : null,
     };
-
-    if (req.isAuthenticated()) {
-      data.userId = req.user.id;
-      data.userName = `${req.user.first_name} ${req.user.last_name}`;
-    }
 
     res.render("products.ejs", data);
   } catch (err) {
@@ -182,6 +244,7 @@ app.get("/product/:productId", async (req, res) => {
       categories: categoriesResult.rows,
       bids: [],
       isOwner: false,
+      isBidder: false,
     };
 
     if (req.isAuthenticated()) {
@@ -189,8 +252,16 @@ app.get("/product/:productId", async (req, res) => {
       data.userId = userId;
       data.userName = `${req.user.first_name} ${req.user.last_name}`;
       data.isOwner = userId === product.owner_id;
+      const theBid = await db.query(`SELECT * FROM bids WHERE product_id = $1 AND bidder_id = $2`, [
+        productId,
+        userId,
+      ]);
 
-      if (data.isOwner) {
+      if (theBid.rows.length > 0) {
+        data.isBidder = true;
+        data.userBidPrice = theBid.rows[0].bid;
+        data.userBidTime = theBid.rows[0].bid_time;
+      } else if (data.isOwner) {
         const bidsResult = await db.query(
           `
           SELECT b.*, u.first_name || ' ' || u.last_name AS username, u.profile_picture
@@ -466,10 +537,10 @@ app.post("/product/:productId/bid", async (req, res) => {
         .json({ message: "This product has already been sold." });
     }
 
-    if (bidAmount < parseFloat(product.minimum_price)) {
+    if (bidAmount < parseFloat(product.minimum_price.replace(/[$,]/g, ""))) {
       return res
         .status(400)
-        .json({ message: `Bid must be at least ${product.minimum_price}.` });
+        .json({ message: `Bid must be at least ${parseFloat(product.minimum_price.replace(/[$,]/g, ""))}.` });
     }
 
     if (product.owner_id === userId) {
@@ -480,10 +551,10 @@ app.post("/product/:productId/bid", async (req, res) => {
 
     await db.query(
       `
-      INSERT INTO bids (product_id, bidder_id, bid)
-      VALUES ($1, $2, $3)
+      INSERT INTO bids (product_id, bidder_id, bid, bid_time)
+      VALUES ($1, $2, $3, NOW())
       ON CONFLICT (product_id, bidder_id)
-      DO UPDATE SET bid = EXCLUDED.bid, bid_time = CURRENT_TIMESTAMP
+      DO UPDATE SET bid = EXCLUDED.bid, bid_time = EXCLUDED.bid_time
     `,
       [productId, userId, bidAmount]
     );
@@ -534,14 +605,16 @@ app.post("/accept-bid", async (req, res) => {
     }
 
     await db.query(
-      `UPDATE products SET sold = TRUE, updated_at = NOW() WHERE id = $1`,
+      `UPDATE products SET sold = TRUE WHERE id = $1`,
       [productId]
     );
 
     await db.query(
-      `INSERT INTO sell_off (product_id, buyer_id, final_price, sold_at) VALUES ($1, $2, $3, NOW())`,
+      `INSERT INTO sell_off (product_id, buyer_id, final_price)
+      VALUES ($1, $2, $3)`,
       [productId, bidderId, bid.bid]
     );
+
 
     await db.query(`DELETE FROM bids WHERE product_id = $1`, [productId]);
 

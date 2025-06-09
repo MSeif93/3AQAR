@@ -4,11 +4,7 @@
   <div class="card shadow-sm">
     <div class="card-body animate__animated animate__fadeIn">
       <h5 class="card-title mb-4"><%= locals.product ? 'Edit 3AQAR' : 'Add New 3AQAR' %></h5>
-      <form class="was-validated" action="<%= locals.product ? `/product/${product.id}/edit` : '/submit' %>" method="POST" enctype="multipart/form-data">
-  <% if (locals.product) { %>
-    <input type="hidden" name="_method" value="PATCH">
-  <% } %>
-        
+      <form class="was-validated" action="<%= locals.product ? `/product/${product.id}/edit?_method=PATCH` : '/submit' %>" method="POST" enctype="multipart/form-data" onsubmit="console.log('submitting...')">
         <div class="mb-3">
           <label for="validationCustom01" class="form-label">3AQAR Title</label>
           <input 

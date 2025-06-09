@@ -48,7 +48,7 @@ CREATE TABLE bids (
   product_id INTEGER REFERENCES products(id),
   bidder_id INTEGER REFERENCES users(id),
   bid MONEY NOT NULL,
-  bid_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  bid_time TIMESTAMP,
   PRIMARY KEY (product_id, bidder_id)
 );
 

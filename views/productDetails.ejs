@@ -84,6 +84,11 @@
 
         <% if (isOwner && !product.sold) { %>
           <a href="/product/<%= product.id %>/edit" class="btn btn-warning mt-3">Edit Product</a>
+        <% } else if (isBidder) { %>
+          <div class="alert alert-info mt-3">
+            Your bid = <%= userBidPrice %><br>
+            Last update = <%= new Date(userBidTime).toLocaleString() %>
+          </div>
         <% } %>
       </div>
     </div>
@@ -94,11 +99,11 @@
     <% if (!isOwner && !product.sold) { %>
       <div class="row mt-4">
         <div class="col-md-6 offset-md-3">
-          <h5>Submit Your Bid</h5>
+          <h5><%= isBidder ? "Update Your Bid" : "Submit Your Bid" %></h5>
 <form method="POST" action="/product/<%= product.id %>/bid">
   <div class="input-group">
     <input type="number" name="bid" step="0.01" class="form-control" placeholder="Enter your bid" required />
-    <button class="btn btn-primary" type="submit">Submit Bid</button>
+    <button class="btn btn-primary" type="submit"><%= isBidder ? "Update Bid" : "Submit Bid" %></button>
   </div>
 </form>
 
@@ -192,6 +197,7 @@
 
       alert('Bid submitted successfully!');
       form.reset();
+      location.reload();
 
     } catch (err) {
       alert('Network error. Please try again.');

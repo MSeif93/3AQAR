@@ -1,8 +1,5 @@
 <%- include('partials/header') %>
 
-    
-
-<!-- // Category Details \\ -->
 <main>
   <section class="py-5 text-center container">
     <div class="row py-lg-5">
@@ -35,13 +32,13 @@
           <div class="col">
             <div class="card shadow-sm">
                 <% if (product.image1) { %>
-                  <img src="/image/<%= product.id %>/image1" alt="Product Image" style="height: 100%; width: 100%;" />
+                  <img src="/image/<%= product.id %>/image1" class="card-img-top object-fit-cover" style="height: 200px; width: 100%;" />
                 <% } else { %>
                   <rect fill="#55595c" width="100%" height="100%" />
                 <% } %>
               </svg>
               <div class="card-body">
-                <p class="card-text">
+                <p class="card-text text-truncate" style="max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                   <%= product.name %>
                   <% if (isSoldView) { %>
                     <span class="badge bg-danger ms-2">SOLD</span>
@@ -62,10 +59,20 @@
       </div>
     </div>
   </div>
+
+  <% if (totalPages > 1) { %>
+  <nav aria-label="Page navigation" class="mt-4">
+    <ul class="pagination justify-content-center">
+      <% for (let i = 1; i <= totalPages; i++) { %>
+        <li class="page-item <%= i === currentPage ? 'active' : '' %>">
+          <a class="page-link" href="?page=<%= i %><%= isSoldView ? '&sold=true' : '' %>"><%= i %></a>
+        </li>
+      <% } %>
+    </ul>
+  </nav>
+<% } %>
+
 </main>
-
-
-    <!-- \\ Category Details // -->
 
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"
