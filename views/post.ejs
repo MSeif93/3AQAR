@@ -7,55 +7,31 @@
       <form class="was-validated" action="<%= locals.product ? `/product/${product.id}/edit?_method=PATCH` : '/submit' %>" method="POST" enctype="multipart/form-data" onsubmit="console.log('submitting...')">
         <div class="mb-3">
           <label for="validationCustom01" class="form-label">3AQAR Title</label>
-          <input 
-            type="text" 
-            class="form-control" 
-            id="validationCustom01" 
-            placeholder="Required 3AQAR Title" 
-            name="title" 
-            required
-            value="<%= locals.product ? product.name : '' %>"
-          >
+          <input type="text" class="form-control" id="validationCustom01" placeholder="Required 3AQAR Title" name="title" required value="<%= locals.product ? product.name : '' %>">
           <div class="invalid-feedback">Please enter a title.</div>
         </div>
 
         <div class="mb-3">
           <label for="validationTextarea" class="form-label">3AQAR Description</label>
-          <textarea 
-            class="form-control" 
-            id="validationTextarea" 
-            placeholder="Required 3AQAR Description" 
-            name="description" 
-            required
-          ><%= locals.product ? product.description : '' %></textarea>
+          <textarea class="form-control" id="validationTextarea" placeholder="Required 3AQAR Description" name="description" required><%= locals.product ? product.description : '' %></textarea>
           <div class="invalid-feedback">Please enter a description.</div>
         </div>
 
-<div class="input-group mb-3">
-  <span class="input-group-text">$</span>
-  <input 
-    type="text" 
-    class="form-control" 
-    aria-label="Amount" 
-    name="price" 
-    placeholder="Required 3AQAR Price" 
-    required 
-    pattern="^\d+(\.\d{1,2})?$" 
-    title="Please enter a valid price"
-    value="<%= locals.product && locals.product.minimum_price ? Number(String(product.minimum_price).replace(/[^0-9.]/g, '')) : '' %>"
-  >
-  <span class="input-group-text">.00</span>
-</div>
+        <div class="input-group mb-3">
+          <span class="input-group-text">$</span>
+          <input type="text" class="form-control" aria-label="Amount" name="price" placeholder="Required 3AQAR Price" required pattern="^\d+(\.\d{1,2})?$" title="Please enter a valid price" value="<%= locals.product && locals.product.minimum_price ? Number(String(product.minimum_price).replace(/[^0-9.]/g, '')) : '' %>">
+          <span class="input-group-text">.00</span>
+        </div>
 
         <div class="mb-3">
           <select class="form-select" required aria-label="select example" name="category">
             <option value="">Select Category</option>
             <% if (categories && categories.length > 0) { %>
-              <% for (let category of categories) { %>
-                <option value="<%= category.id %>" <%= locals.product && locals.product.category_id === category.id ? 'selected' : '' %>><%= category.name %></option>
-              <% } %>
+            <% for (let category of categories) { %>
+            <option value="<%= category.id %>" <%= locals.product && locals.product.category_id === category.id ? 'selected' : '' %>><%= category.name %></option>
+            <% } %>
             <% } else { %>
-              <option disabled>No categories available</option>
+            <option disabled>No categories available</option>
             <% } %>
           </select>
           <div class="invalid-feedback">Please select a category</div>
@@ -67,26 +43,26 @@
             <div class="col-md-4">
               <input type="file" class="form-control" name="photo1" onchange="previewImage(event, 'preview1')" <%= locals.product ? '' : 'required' %>>
               <% if (locals.product && locals.product.image1) { %>
-                <img id="preview1" src="data:image/webp;base64,<%= product.image1.toString('base64') %>" class="img-thumbnail mt-2" style="max-height: 100px; aspect-ratio: 1/1;" />
+              <img id="preview1" src="data:image/webp;base64,<%= product.image1.toString('base64') %>" class="img-thumbnail mt-2" style="max-height: 100px; aspect-ratio: 1/1;" />
               <% } else { %>
-                <img id="preview1" class="img-thumbnail mt-2 d-none" style="max-height: 100px; aspect-ratio: 1/1;" />
+              <img id="preview1" class="img-thumbnail mt-2 d-none" style="max-height: 100px; aspect-ratio: 1/1;" />
               <% } %>
               <div class="invalid-feedback">Main photo is required</div>
             </div>
             <div class="col-md-4">
               <input type="file" class="form-control" name="photo2" onchange="previewImage(event, 'preview2')">
               <% if (locals.product && locals.product.image2) { %>
-                <img id="preview2" src="data:image/webp;base64,<%= product.image2.toString('base64') %>" class="img-thumbnail mt-2" style="max-height: 100px; aspect-ratio: 1/1;" />
+              <img id="preview2" src="data:image/webp;base64,<%= product.image2.toString('base64') %>" class="img-thumbnail mt-2" style="max-height: 100px; aspect-ratio: 1/1;" />
               <% } else { %>
-                <img id="preview2" class="img-thumbnail mt-2 d-none" style="max-height: 100px; aspect-ratio: 1/1;" />
+              <img id="preview2" class="img-thumbnail mt-2 d-none" style="max-height: 100px; aspect-ratio: 1/1;" />
               <% } %>
             </div>
             <div class="col-md-4">
               <input type="file" class="form-control" name="photo3" onchange="previewImage(event, 'preview3')">
               <% if (locals.product && locals.product.image3) { %>
-                <img id="preview3" src="data:image/webp;base64,<%= product.image3.toString('base64') %>" class="img-thumbnail mt-2" style="max-height: 100px; aspect-ratio: 1/1;" />
+              <img id="preview3" src="data:image/webp;base64,<%= product.image3.toString('base64') %>" class="img-thumbnail mt-2" style="max-height: 100px; aspect-ratio: 1/1;" />
               <% } else { %>
-                <img id="preview3" class="img-thumbnail mt-2 d-none" style="max-height: 100px; aspect-ratio: 1/1;" />
+              <img id="preview3" class="img-thumbnail mt-2 d-none" style="max-height: 100px; aspect-ratio: 1/1;" />
               <% } %>
             </div>
           </div>
@@ -112,16 +88,7 @@
   </div>
 </div>
 
-
-
-
-
-
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO"
-      crossorigin="anonymous"
-    ></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
 <script>
   function previewImage(event, previewId) {
     const input = event.target;
@@ -136,5 +103,6 @@
     }
   }
 </script>
-  </body>
+</body>
+
 </html>
