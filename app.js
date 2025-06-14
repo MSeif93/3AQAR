@@ -21,13 +21,14 @@ env.config();
 const app = express();
 const pgSession = connectPgSimple(session);
 
+app.use(morgan("dev"));
+
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
+app.use(express.static(path.join(process.cwd(), "public")));
+
 app.set("view engine", "ejs");
 app.set("views", path.join(process.cwd(), "views"));
 
-// app.use(morgan("dev"));
-app.use(express.urlencoded({ extended: true, limit: "10kb" }));
-app.use(helmet());
-app.use(express.static(path.join(process.cwd(), "public")));
 app.use(
   methodOverride((req, res) => {
     if (req.body && typeof req.body === "object" && "_method" in req.body) {
@@ -57,9 +58,12 @@ app.use(
 app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(csurf());
+// app.use(csurf());
 app.use((req, res, next) => {
-  res.locals.csrfToken = req.csrfToken();
+  // res.locals.csrfToken = req.csrfToken();
+  res.locals.currentUser = req.user;
+  res.locals.success = req.flash("success");
+  res.locals.error = req.flash("error");
   next();
 });
 app.use(
@@ -89,20 +93,23 @@ app.use("/", [
 
 // Error Handling
 
+// const categories = await db.query("SELECT * FROM categories");
+
 app.use((err, req, res, next) => {
-  if (err.code === "EBADCSRFTOKEN") {
-    return res.status(403).send("Invalid CSRF token");
-  }
+  // if (err.code === "EBADCSRFTOKEN") {
+  //   req.flash("error", "Session expired. Please try again.");
+  //   return res.redirect(req.originalUrl);
+  // }
 
   if (err instanceof multer.MulterError) {
     return res.status(400).send(`Upload Error: ${err.message}`);
   }
 
-  if (err.message === "Only image files are allowed!") {
-    return res
-      .status(400)
-      .send("Invalid file type. Only image files are allowed.");
-  }
+  // if (err.message === "Only image files are allowed!") {
+  //   return res
+  //     .status(400)
+  //     .send("Invalid file type. Only image files are allowed.");
+  // }
   if (err.status === 404) {
     return res.status(404).send("Not Found");
   }

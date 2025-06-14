@@ -8,7 +8,8 @@
       <div class="card">
         <div class="card-body">
           <form id="registerForm" action="/register" method="POST" enctype="multipart/form-data">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+            <div id="clientErrorAlert" class="alert alert-danger d-none"></div>
 
             <div class="container">
               <div class="row mb-3">
@@ -51,16 +52,16 @@
               </div>
 
               <% if (locals.error) { %>
-              <div role="alert" class="alert alert-danger alert-dismissible fade show">
+              <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <strong>Error:</strong> <%= error %>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
               </div>
               <% } %>
 
-              <div class="col-md-6">
+              <div class="col-md-6 mb-3">
                 <label for="profile_picture" class="form-label">Profile Picture</label>
                 <input type="file" class="form-control" id="profile_picture" name="profile_picture" accept="image/*" />
-                <img id="preview" alt="Image Preview" class="img-thumbnail mt-2 d-none" style="max-height: 100px" />
+                <img id="preview" alt="Image Preview" class="img-thumbnail mt-2 d-none" style="max-height: 100px;" />
               </div>
             </div>
 

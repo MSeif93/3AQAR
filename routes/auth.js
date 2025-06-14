@@ -36,9 +36,16 @@ const saltRounds = 10;
 router.get("/register", async (req, res) => {
   try {
     const categories = await db.query("SELECT * FROM categories");
-    res.render("register.ejs", { categories: categories.rows });
+
+    res.render("register.ejs", {
+      categories: categories.rows,
+      error: req.flash("error"),
+      errors: [],
+      csrfToken: req.csrfToken(),
+    });
   } catch (err) {
     console.log(err);
+    res.status(500).send("Something went wrong");
   }
 });
 
@@ -49,6 +56,12 @@ router.post(
     body("password")
       .isLength({ min: 6 })
       .withMessage("Password must be at least 6 characters."),
+    body("confirm_password").custom((value, { req }) => {
+      if (value !== req.body.password) {
+        throw new Error("Passwords do not match");
+      }
+      return true;
+    }),
     body("first_name").notEmpty().withMessage("First name is required."),
     body("last_name").notEmpty().withMessage("Last name is required."),
   ],
@@ -58,10 +71,12 @@ router.post(
     const errors = validationResult(req);
 
     if (!errors.isEmpty()) {
-      return res.render("register.ejs", {
+      console.log("Validation errors: ", errors.array(), req.body);
+      return res.status(400).render("register.ejs", {
         errors: errors.array(),
         error: null,
         categories: categories.rows,
+        csrfToken: req.csrfToken(),
       });
     }
 
@@ -77,6 +92,7 @@ router.post(
           errors: [],
           error: "Email address already in use",
           categories: categories.rows,
+          csrfToken: req.csrfToken(),
         });
       }
 
@@ -87,6 +103,7 @@ router.post(
             errors: [],
             error: "Invalid file type. Please upload images only.",
             categories: categories.rows,
+            csrfToken: req.csrfToken(),
           });
         }
 
