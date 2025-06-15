@@ -38,7 +38,7 @@ const db = new pg.Pool({
 db.connect();
 
 // Middlewares
-
+app.set("trust proxy", 1);
 app.use(
   session({
     secret: process.env.SESSION_SECRET,
