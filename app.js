@@ -13,9 +13,10 @@ import sharp from "sharp";
 import connectPgSimple from "connect-pg-simple";
 import methodOverride from "method-override";
 
-const pgSession = connectPgSimple(session);
 const app = express();
-const port = 3000;
+const pgSession = connectPgSimple(session);
+
+const port = process.env.PORT || 3000;
 const saltRounds = 10;
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -32,11 +33,7 @@ env.config();
 // Database connection
 
 const db = new pg.Pool({
-  user: process.env.PG_USER,
-  host: process.env.PG_HOST,
-  database: process.env.PG_DATABASE,
-  password: process.env.PG_PASSWORD,
-  port: process.env.PG_PORT,
+  connectionString: process.env.DATABASE_URL,
 });
 db.connect();
 
@@ -132,7 +129,9 @@ app.get("/profile/:profileId", async (req, res) => {
       profileId,
     ]);
     if (profileResult.rows.length === 0) {
-      return res.status(404).send("Profile not found");
+      return res
+        .status(404)
+        .render("not-found.ejs", { message: "Profile not found" });
     }
     const profile = profileResult.rows[0];
     const categories = await db.query("SELECT * FROM categories");
@@ -222,10 +221,16 @@ app.get("/category/:categoryId", async (req, res) => {
     const totalProducts = parseInt(countResult.rows[0].count);
     const totalPages = Math.ceil(totalProducts / limit);
 
+    if (!categoryName.rows[0]) {
+      return res
+        .status(404)
+        .render("not-found.ejs", { message: "Category not found" });
+    }
+
     const data = {
       categoryId,
       categories: categories.rows,
-      categoryName: categoryName.rows[0]?.name || "Unknown Category",
+      categoryName: categoryName.rows[0].name,
       products: productsResult.rows,
       isSoldView: soldFlag,
       currentPage: page,
@@ -288,7 +293,9 @@ app.get("/product/:productId", async (req, res) => {
     const buyer = buyerResult.rows[0];
 
     if (!product) {
-      return res.status(404).send("Product not found");
+      return res
+        .status(404)
+        .render("not-found.ejs", { message: "Product not found" });
     }
 
     const data = {
@@ -602,13 +609,11 @@ app.post("/product/:productId/bid", async (req, res) => {
     }
 
     if (bidAmount < parseFloat(product.minimum_price.replace(/[$,]/g, ""))) {
-      return res
-        .status(400)
-        .json({
-          message: `Bid must be at least ${parseFloat(
-            product.minimum_price.replace(/[$,]/g, "")
-          )}.`,
-        });
+      return res.status(400).json({
+        message: `Bid must be at least ${parseFloat(
+          product.minimum_price.replace(/[$,]/g, "")
+        )}.`,
+      });
     }
 
     if (product.owner_id === userId) {
@@ -793,6 +798,10 @@ app.patch(
     }
   }
 );
+
+app.use((req, res, next) => {
+  res.status(404).render("not-found.ejs", { message: "Page not found" });
+});
 
 // Passport Configurations
 

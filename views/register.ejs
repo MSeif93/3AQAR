@@ -42,6 +42,7 @@
                       Show
                     </button>
                   </div>
+                  <ul id="passwordChecklist" class="list-unstyled mt-2 mb-0 small"></ul>
                 </div>
                 <div class="col-md-6">
                   <label for="confirm_password" class="form-label">Confirm Password</label>
@@ -53,19 +54,20 @@
                   </div>
                 </div>
               </div>
+
               <% if (locals.error) { %>
               <alert role="alert" class="alert alert-danger">
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 <strong>Error: <%= error %></strong>
               </alert>
               <% } %>
+
               <div class="col-md-6">
                 <label for="profile_picture" class="form-label">Profile Picture</label>
                 <input type="file" class="form-control" id="profile_picture" name="profile_picture" accept="image/*" onchange="previewImage(event)" />
                 <img id="preview" src="#" alt="Image Preview" class="img-thumbnail mt-2 d-none" style="max-height: 100px" />
               </div>
             </div>
-
 
             <div class="row">
               <div class="col text-end">
@@ -87,29 +89,30 @@
 <!-- \\ Register // -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
+
 <script>
   function previewImage(event) {
     const input = event.target;
     const preview = document.getElementById("preview");
 
     if (input.files && input.files[0]) {
+      const file = input.files[0];
+      const validImageTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (!validImageTypes.includes(file.type)) {
+        alert("Please select a valid image file (JPG, PNG, GIF, or WEBP).");
+        input.value = "";
+        preview.classList.add("d-none");
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = function(e) {
         preview.src = e.target.result;
         preview.classList.remove("d-none");
       };
-      reader.readAsDataURL(input.files[0]);
+      reader.readAsDataURL(file);
     }
   }
-
-  document.querySelector("form").addEventListener("submit", function(e) {
-    const password = document.getElementById("password").value;
-    const confirm = document.getElementById("confirm_password").value;
-    if (password !== confirm) {
-      e.preventDefault();
-      alert("Passwords do not match.");
-    }
-  });
 
   function toggleVisibility(id, button) {
     const input = document.getElementById(id);
@@ -121,6 +124,62 @@
       button.textContent = "Show";
     }
   }
+
+  // Live validation checklist
+  document.getElementById("password").addEventListener("input", function() {
+    const password = this.value;
+    const checklist = document.getElementById("passwordChecklist");
+
+    const rules = [{
+        test: (pw) => pw.length >= 6,
+        text: "At least 6 characters",
+      },
+      {
+        test: (pw) => /[A-Z]/.test(pw),
+        text: "One uppercase letter (A-Z)",
+      },
+      {
+        test: (pw) => /[a-z]/.test(pw),
+        text: "One lowercase letter (a-z)",
+      },
+      {
+        test: (pw) => /[^A-Za-z0-9]/.test(pw),
+        text: "One special character (e.g., !@#$)",
+      },
+    ];
+
+    checklist.innerHTML = "";
+    rules.forEach((rule) => {
+      const li = document.createElement("li");
+      const passed = rule.test(password);
+      li.innerHTML = passed ? `✅ ${rule.text}` : `❌ ${rule.text}`;
+      li.className = passed ? "text-success" : "text-danger";
+      checklist.appendChild(li);
+    });
+  });
+
+  // Form validation on submit
+  document.querySelector("form").addEventListener("submit", function(e) {
+    const password = document.getElementById("password").value;
+    const confirm = document.getElementById("confirm_password").value;
+
+    const isValid =
+      password.length >= 6 &&
+      /[A-Z]/.test(password) &&
+      /[a-z]/.test(password) &&
+      /[^A-Za-z0-9]/.test(password);
+
+    if (password !== confirm) {
+      e.preventDefault();
+      alert("Passwords do not match.");
+      return;
+    }
+
+    if (!isValid) {
+      e.preventDefault();
+      alert("Password does not meet the required strength.");
+    }
+  });
 </script>
 </body>
 
